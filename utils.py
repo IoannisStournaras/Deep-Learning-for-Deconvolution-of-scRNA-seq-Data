@@ -38,10 +38,10 @@ def assign_labels(cells_ID,coeffients,inverse=False):
     output: dictionart {cell_id : label}
     """
     if inverse:
-        ID1 = list(np.where(np.diff(coeffients, axis=0)>0)[1])
+        ID1 = list(np.where(np.diff(coeffients, axis=0)>=0)[1])
         ID2 = list(np.where(np.diff(coeffients, axis=0)<0)[1])
     else:
-        ID1 = list(np.where(np.diff(coeffients, axis=0)<0)[1])
+        ID1 = list(np.where(np.diff(coeffients, axis=0)<=0)[1])
         ID2 = list(np.where(np.diff(coeffients, axis=0)>0)[1])
     mydict1 = dict.fromkeys(np.array(cells_ID)[ID1], 0)
     mydict2 = dict.fromkeys(np.array(cells_ID)[ID2], 1)
@@ -58,3 +58,25 @@ def cluster_acc(Y_pred, Y):
     w[Y_pred[i], Y[i]] += 1
   ind = linear_assignment(w.max() - w)
   return sum([w[i,j] for i,j in ind])*1.0/Y_pred.size, w
+
+def adjust_learning_rate(init_lr, optimizer, epoch):
+    lr = max(init_lr * (0.9 ** (epoch//10)), 0.00001)
+    for param_group in optimizer.param_groups:
+        param_group["lr"] = lr
+    return lr
+
+# Fuctions taking in a module and applying the specified weight initialization
+def init_weights(m):
+    if type(m) == nn.Linear:
+        torch.nn.init.xavier_uniform(m.weight)
+        m.bias.data.fill_(0.01)
+
+def weights_init_uniform_rule(m):
+    classname = m.__class__.__name__
+    # for every Linear layer in a model..
+    if classname.find('Linear') != -1:
+        # get the number of the inputs
+        n = m.in_features
+        y = 1.0/np.sqrt(n)
+        m.weight.data.uniform_(-y, y)
+        m.bias.data.fill_(0)
