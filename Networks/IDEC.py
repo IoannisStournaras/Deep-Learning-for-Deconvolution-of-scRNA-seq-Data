@@ -90,11 +90,11 @@ class IDEC(nn.Module):
 
         #evaluate clustering performance
         y_pred = tmp_q.cpu().numpy().argmax(1)
-        print(y_pred.shape)
+
         labels_changed = np.sum(y_pred != self.y_pred_last).astype(
             np.float32) / y_pred.shape[0]
         self.y_pred_last = y_pred
-        print(labels.shape)
+
         if labels_changed < tol:
             self.convergence_iter+=1
         else:
