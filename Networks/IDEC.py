@@ -10,18 +10,19 @@ from utils import adjust_learning_rate,init_weights,cluster_acc
 from typing import Optional
 from sklearn.cluster import KMeans
 from Stacked_AE import AE 
-print(sys.path)
+
 class IDEC(nn.Module):
     def __init__(self, n_input, encode, latent, 
-                 decode, n_clusters, alpha=1,
+                 decode, n_clusters, alpha=1, binary=True,
                  cluster_centers: Optional[torch.Tensor] = None):
         super(IDEC, self).__init__()
         self.alpha = 1.0
         self.n_clusters = n_clusters
-        self.ae = AE(n_input, encode,latent, decode)
+        self.ae = AE(n_input, encode,latent, decode,binary=binary)
         self.y_pred_last = None
         self.convergence_iter = 0
         self.prop = None
+        self.binary = binary
 
         if cluster_centers is None:
             initial_cluster_centers = torch.zeros(

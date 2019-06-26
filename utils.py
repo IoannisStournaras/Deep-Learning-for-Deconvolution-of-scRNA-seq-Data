@@ -1,3 +1,5 @@
+import torch
+from torch import nn
 import random
 import matplotlib.pyplot as plt
 from tqdm import tqdm
@@ -69,7 +71,9 @@ def adjust_learning_rate(init_lr, optimizer, epoch):
 def init_weights(m):
     if type(m) == nn.Linear:
         torch.nn.init.xavier_uniform(m.weight)
-        m.bias.data.fill_(0.01)
+        try:
+            m.bias.data.fill_(0.01)
+        except: pass
 
 def weights_init_uniform_rule(m):
     classname = m.__class__.__name__

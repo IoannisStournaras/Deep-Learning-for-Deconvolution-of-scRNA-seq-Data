@@ -102,5 +102,6 @@ class AAE(nn.Module):
         merged = self.decode_y(y) 
         merged += self.decode_z(z)
         merged += self.merged_bias
+        merged = nn.ReLU(merged)
         return self.decoder(merged)
     
