@@ -2,10 +2,7 @@
 A code repo containing a potential framework for carrying out experiments on demultiplexing data from pooled experimental designs without any type of genotype information of the pooled samples.
 
 ## Introduction
-
-Welcome to the MLPractical's Introduction to the MLP GPU Cluster branch. This branch provides tutorial material for the MLP Cluster.
-The material available includes tutorial documents and code, as well as tooling that provides more advanced features to aid you in your quests
-to train lots of learnable differentiable computational graphs.
+ To be filled
 
 ## Installation
 
