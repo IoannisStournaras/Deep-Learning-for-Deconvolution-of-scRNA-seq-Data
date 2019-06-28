@@ -5,6 +5,31 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import numpy as np
 from sklearn.utils.linear_assignment_ import linear_assignment
+import os
+import operator
+from operator import itemgetter
+import json
+from  more_itertools import unique_everseen
+from sklearn.preprocessing import LabelEncoder
+
+def create_Dataset(dir_path,filename='Dataset_1.npy'):
+    for file in os.listdir(dir_path):
+        if file.endswith(".json"):
+            path_ = os.path.join(dir_path, file)
+            with open(path_) as datafile:
+                data = json.load(datafile)
+                features = list(data.values())    
+                flat_list = [item for sublist in features for item in sublist]
+                flat_unique = list(unique_everseen(flat_list))
+                dataset = np.zeros((len(flat_unique),len(data.keys())),dtype=np.int8)
+                loop = tqdm(data.keys())
+                for col,key in enumerate(loop):
+                    for val in data[key]:
+                        row = flat_unique.index(val)
+                        dataset[row,col] = 1
+                save_path = os.path.join(dir_path,filename)
+                np.save(save_path,dataset)
+    return dataset
 
 def Permute_Dataset(Original_data,load_ready=False):
     if load_ready:
@@ -66,6 +91,61 @@ def adjust_learning_rate(init_lr, optimizer, epoch):
     for param_group in optimizer.param_groups:
         param_group["lr"] = lr
     return lr
+
+def donor_info(dataset, models_labels, top=20,path='/home/john/Desktop/Dissertation/Dataset1'):    
+    output_dir = {} 
+    for file in os.listdir(path):
+        if file.endswith(".json"):
+            path_ = os.path.join(path, file)
+            with open(path_) as datafile:
+                data = json.load(datafile)
+                features = list(data.values())    
+                flat_list = [item for sublist in features for item in sublist]
+                variants = list(unique_everseen(flat_list))
+                cells_ID = list(data.keys())
+    
+    #Find cells IDs for each donor 
+    donor1, donor2 = set(range(0,dataset.shape[0])), set(range(0,dataset.shape[0]))
+    for key,value in models_labels.items():
+        donor1 = donor1 & set(np.where(value==0)[0])
+        donor2 = donor2 & set(np.where(value==1)[0])
+    donor1 = list(donor1)
+    donor2 = list(donor2)
+    output_dir["donor1_index"] = donor1
+    output_dir["donor2_index"] = donor2        
+    output_dir["donor1_cells"] = list(itemgetter(*donor1)(cells_ID))
+    output_dir["donor2_cells"] = list(itemgetter(*donor2)(cells_ID))
+    
+    #Find number of cells per variant
+    Donor1_variants_total = dataset[donor1].sum(axis=0)
+    Donor2_variants_total = dataset[donor2].sum(axis=0)
+    
+    if top!=None:
+        ind_2 = np.argpartition(Donor2_variants_total, -top)[-top:]
+        ind_1 = np.argpartition(Donor1_variants_total, -top)[-top:]
+        top20_names = list(itemgetter(*ind_1)(variants))
+        top20_values = list(Donor1_variants_total[ind_1])
+        output_dir["donor1_top20"] ={t[1]:t[0] for t in sorted(zip(top20_values, top20_names))}
+        top20_names = list(itemgetter(*ind_2)(variants))
+        top20_values = list(Donor2_variants_total[ind_2])
+        output_dir["donor2_top20"] ={t[1]:t[0] for t in sorted(zip(top20_values, top20_names))}
+        
+    variants_ = Donor1_variants_total[np.where(Donor1_variants_total>0)]
+    names_1 = list(itemgetter(*np.where(Donor1_variants_total>0)[0])(variants))
+    output_dir["donor1_variants"] ={t[1]:t[0] for t in zip(variants_, names_1)}
+    variants_ = Donor2_variants_total[np.where(Donor2_variants_total>0)]
+    names_2 = list(itemgetter(*np.where(Donor2_variants_total>0)[0])(variants))
+    output_dir["donor2_variants"] ={t[1]:t[0] for t in zip(variants_, names_2)}
+    
+    unique_1 = [i for i in names_1 if i not in names_2]
+    unique_2 = [i for i in names_2 if i not in names_1]
+    b = output_dir["donor1_variants"]
+    c = {var : b[var] for var in unique_1}
+    output_dir['donor1_cells_unique'] = sorted(c.items(), key=operator.itemgetter(1))    
+    b = output_dir["donor2_variants"]
+    c = {var : b[var] for var in unique_2}
+    output_dir['donor2_cells_unique'] = sorted(c.items(), key=operator.itemgetter(1))
+    return output_dir
 
 # Fuctions taking in a module and applying the specified weight initialization
 def init_weights(m):
