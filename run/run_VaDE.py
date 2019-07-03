@@ -9,7 +9,10 @@ import numpy as np
 from Datasets import Dataset
 from VADE import VaDE
 from BMF import BMF
+import os
 
+dir_path = '/home/s1879286/Dissertation/Deep-Learning-for-Deconvolution-of-scRNA-seq-Data'
+pretrain = os.path.join(dir_path,'Pretrained','pretrained_SDAE_3.pt')
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='SDAE Pretrain')
@@ -21,11 +24,13 @@ if __name__ == "__main__":
                         help='input dropout for training (default: 0.1)')
     parser.add_argument('--epochs', type=int, default=10, metavar='N',
                         help='number of epochs to train (default: 10)')
+    parser.add_argument('--AE_epochs', type=int, default=30, metavar='N',
+                        help='number of epochs to train Auto-encoder (default:30)') 
     parser.add_argument('--clusters', default=2, type=int,
                         help='number of clusters (default: 2)')
     parser.add_argument('--cuda', action='store_false', default=True,
                         help='enables CUDA training')
-    parser.add_argument('--pretrain', type=str, default="/home/john/Desktop/Dissertation/Dataset1/Pretrained Weights/pretrained_SDAE1.pt",
+    parser.add_argument('--pretrain', type=str, default=pretrain,
                         help='Path to load pretrained weights for VaDE')
 
 
@@ -37,14 +42,15 @@ if __name__ == "__main__":
     kwargs = {'num_workers': 8, 'pin_memory': True} if args.cuda else {}
     
     print('Loading the dataset...')
-    path = '/home/john/Desktop/Dissertation/Dataset1/labels_PCA'
-    with open(path, 'rb') as f:
-        labels_dict = pickle.load(f)
-    labels_ID = list(labels_dict.keys())
-
-    path = '/home/john/Desktop/Dissertation/Dataset1/Dataset_1.npy'
+    path = os.path.join(dir_path,'labels_3.npy')
+  #  with open(path, 'rb') as f:
+  #      labels_dict = pickle.load(f)
+  #  labels_ID = list(labels_dict.keys())
+    labels = np.load(path)
+    path = os.path.join(dir_path,'Dataset_3.npy')
     df_train = np.load(path)
-    labels = np.array(list(labels_dict.values()))
+    df_train = df_train.T
+    #labels = np.array(list(labels_dict.values()))
 
     print('Creating DataLoader...')
     train_dataset = Dataset(data=df_train,labels=labels)
@@ -53,26 +59,28 @@ if __name__ == "__main__":
                                             shuffle=True,
                                             **kwargs)
     valid_loader = torch.utils.data.DataLoader(train_dataset,
-                                            batch_size=512,
+                                            batch_size=128,
                                             **kwargs)
     print('Created the DataLoader')
 
     vade = VaDE(input_dim=df_train.shape[1], z_dim=args.clusters, n_centroids=args.clusters, binary=True,
-        encodeLayer=[700,500,1000], decodeLayer=[1000,500,700])
+        encodeLayer=[750,700,1000], decodeLayer=[1000,700,750])
 
     if args.pretrain != "":
         print("Loading model from %s..." % args.pretrain)
         vade.load_model(args.pretrain)
     else:
-        path = "/home/john/Desktop/Dissertation/Dataset1/Pretrained Weights/pretrained_SDAE1.pt"
+        path = pretrain
         train_loader_AE = torch.utils.data.DataLoader(train_dataset,
                                             batch_size=64,
                                             shuffle=True,
                                             **kwargs)
-        vade.pretrain(train_loader_AE, path, cuda=args.cuda)
+        vade.pretrain(train_loader_AE, path,num_epochs=args.AE_epochs, cuda=args.cuda,lr=0.0005)
         vade.load_model(path)
 
 
     vade.initialize_gmm(train_loader)
-    vade.fit(train_loader, valid_loader, lr=args.lr, num_epochs=args.epochs ,anneal=True)
-    vade.save_model("/home/john/Desktop/Dissertation/Dataset1/Pretrained Weights/VaDE_3HL1.pt")
+    path = os.path.join(dir_path,'Pretrained','VaDE_3.pt') 
+    vade.fit(train_loader, valid_loader, path, lr=args.lr, num_epochs=args.epochs ,anneal=True)
+    vade.save_model(path)
+    print(vade.class_prop)

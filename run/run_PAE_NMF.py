@@ -5,14 +5,17 @@ from torch import nn, optim
 from torch.nn import functional as F
 from torch.utils import data
 import sys
+import os
 sys.path.insert(0,'..')
 from Networks.PAE_NMF import VAE
 from Datasets import Dataset
-from BMF import BMF
+from Networks.BMF import BMF
 from tqdm import tqdm
 import numpy as np
 import pickle
-import json
+from utils import init_weights
+
+dir_path = "/home/s1879286/Dissertation/Deep-Learning-for-Deconvolution-of-scRNA-seq-Data"
 
 parser = argparse.ArgumentParser(description='VAE for NMF')
 parser.add_argument('--batch-size', type=int, default=128, metavar='N',
@@ -41,14 +44,16 @@ device = torch.device("cuda" if args.cuda else "cpu")
 kwargs = {'num_workers': 8, 'pin_memory': True} if args.cuda else {}
 
 print('Loading the dataset...')
-path = '/home/john/Desktop/Dissertation/Dataset1/labels_PCA'
-with open(path, 'rb') as f:
-    labels_dict = pickle.load(f)
-labels_ID = list(labels_dict.keys())
+path = os.path.join(dir_path,'labels_3.npy')
+labels = np.load(path)
+#with open(path, 'rb') as f:
+#    labels_dict = pickle.load(f)
+#labels_ID = list(labels_dict.keys())
 
-path = '/home/john/Desktop/Dissertation/Dataset1/Dataset_1.npy'
-df_train = np.load(path) 
-labels = np.array(list(labels_dict.values()))
+path =os.path.join(dir_path, 'Dataset_3.npy')
+df_train = np.load(path)
+df_train = df_train.T 
+#labels = np.array(list(labels_dict.values()))
 print('Creating DataLoader...')
 train_dataset = Dataset(data=df_train,labels=labels)
 train_loader = torch.utils.data.DataLoader(train_dataset,
@@ -59,14 +64,14 @@ train_loader = torch.utils.data.DataLoader(train_dataset,
 print('Created the DataLoader')
 
 #Initializing model-optimizer-scheduler
-model = VAE(df_train.shape[1],[400,100],args.embeddings,[100,400]).to(device)
-print(model)
+model = VAE(df_train.shape[1],[500,200],args.embeddings,[500,200]).to(device)
+model.apply(init_weights)
 
 if __name__ == "__main__":
-    model.fit(epochs=args.epochs, train_loader = train_loader, lr = args.lr, device=device)
-    path_to_save_params = '/home/john/Desktop/Dissertation/Dataset3/Pretrained Weights/3HL'
-    torch.save(model.state_dict(), path_to_save_params)
-
+    path = os.path.join(dir_path,'Pretrained','PAE_3HL_3.pt')
+#    model.fit(epochs=args.epochs, train_loader = train_loader, lr = args.lr, device=device,path=path)
+ #   torch.save(model.state_dict(), path)
+    model.load_model(path)
     print('Executing Binary Matrix Factorization...')
     model = model.to('cpu')
     row = torch.from_numpy(np.array(df_train, dtype='float32'))
@@ -80,8 +85,8 @@ if __name__ == "__main__":
 
     model_1 = BMF(W_init=W_learned,H_init=H_learned,tol=1e-5)
     W_final, H_final = model_1.fit_transform(df_train.T)
-    path = '/home/john/Desktop/Dissertation//Dataset3/Decompositions/3HL_BMF_basis.npy'
+    path = os.path.join(dir_path,'Decompositions','3HL_BMF_basis_3.npy')
     np.save(path, W_final)
-    path = '/home/john/Desktop/Dissertation//Dataset3/Decompositions/3HL_BMF_coeff.npy'
+    path = os.path.join(dir_path,'Decompositions','3HL_BMF_coeff_3.npy')
     np.save(path, H_final)
 

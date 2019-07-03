@@ -99,9 +99,9 @@ class StackedDAE(nn.Module):
             train_error.append(train_loss / len(trainloader.dataset))
             print("#Epoch %3d: Reconstruct Loss: %.3f " % 
                 (epoch, train_loss))
-        path = '/home/john/Desktop/Dissertation/Dataset1/TrainingError/SDAE'
-        with open(path, 'wb') as f:
-            pickle.dump(train_error, f)
+       # path = '/home/john/Desktop/Dissertation/Dataset1/TrainingError/SDAE'
+       # with open(path, 'wb') as f:
+        #    pickle.dump(train_error, f)
 
     def load_model(self, path):
         pretrained_dict = torch.load(path, map_location=lambda storage, loc: storage)

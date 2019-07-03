@@ -40,9 +40,12 @@ class VaDE(nn.Module):
 
         #Create Gaussian Parameters
         self.create_gmmparam(n_centroids, z_dim)
+        self.Y_pred_last = None
+        self.convergence_iter = 0
 
     def create_gmmparam(self, n_centroids, z_dim):
-        self.class_prop = nn.Parameter(torch.ones(n_centroids)/n_centroids, requires_grad=False)
+        self.class_prop = nn.Parameter(torch.ones(n_centroids)/n_centroids)    
+        #self.class_prop = nn.Parameter(torch.tensor([0.45,0.45,0.1]), requires_grad=False)
         self.gmm_mean = nn.Parameter(torch.zeros(z_dim, n_centroids))
         self.gmm_cov = nn.Parameter(torch.ones(z_dim, n_centroids))
 
@@ -73,7 +76,7 @@ class VaDE(nn.Module):
 
         sdae.apply(init_weights)
         if self.binary == True:
-            criterion = "binary-cross-entropy"
+            criterion = "cross-entropy"
         else: criterion = 'mse'
         sdae.fit(train_loader, lr=lr, num_epochs=num_epochs, corrupt=corrupt, loss_type=criterion, use_cuda=cuda)
         sdae.save_model(path)
@@ -143,7 +146,8 @@ class VaDE(nn.Module):
         z = self.reparameterize(mu, logvar)
         return z, self.decode(z), mu, logvar
 
-    def fit(self, trainloader, validloader ,lr=0.001,  num_epochs=10, anneal=False):
+    def fit(self, trainloader, validloader ,path ,lr=0.001,  num_epochs=10, anneal=False, tol=0.0005):
+        labels_changed = 1
         use_cuda = torch.cuda.is_available()
         if use_cuda:
             self.cuda()
@@ -168,8 +172,6 @@ class VaDE(nn.Module):
                 train_loss += loss.item()
                 loss.backward()
                 optimizer.step()
-                # print("    #Iter %3d: Reconstruct Loss: %.3f" % (
-                #     batch_idx, recon_loss.data[0]))
 
             self.eval()
             Y = []
@@ -188,21 +190,23 @@ class VaDE(nn.Module):
 
             Y = np.concatenate(Y)
             Y_pred = np.concatenate(Y_pred)
+            if epoch != 0:
+                labels_changed = np.sum(Y_pred != self.Y_pred_last).astype(np.float32) / Y_pred.shape[0]
+            self.Y_pred_last = Y_pred
+            if labels_changed < tol:
+                self.convergence_iter+=1
+            else:
+                self.convergence_iter = 0 
             acc = cluster_acc(Y_pred, Y)
             # valid_loss = total_loss / total_num
             print("#Epoch %3d: lr: %.5f, Train Loss: %.5f, acc: %.5f" % (
                 epoch, epoch_lr, train_loss / len(trainloader.dataset), acc[0]))
             train_error.append(train_loss / len(trainloader.dataset))
-
-
-        probabilities = np.concatenate(probabilities)    
-        path = '/home/john/Desktop/Dissertation/Dataset1/TrainingError/VaDE'
-        with open(path, 'wb') as f:
-            pickle.dump(train_error, f)
-        path = '/home/john/Desktop/Dissertation/Dataset1/Decompositions/VaDE_labels.npy'
-        np.save(path,Y_pred)
-        path = '/home/john/Desktop/Dissertation/Dataset1/Decompositions/VaDE_probs.npy'
-        np.save(path,probabilities)
+            self.save_model(path)
+            if self.convergence_iter >=5:
+                print('percentage of labels changed {:.4f}'.format(labels_changed), '< tol',tol)
+                print('Reached Convergence threshold. Stopping training.')
+                break
 
     def save_model(self, path):
         torch.save(self.state_dict(), path)

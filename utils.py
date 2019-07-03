@@ -11,6 +11,7 @@ from operator import itemgetter
 import json
 from  more_itertools import unique_everseen
 from sklearn.preprocessing import LabelEncoder
+import pickle
 
 def create_Dataset(dir_path,filename='Dataset_1.npy'):
     for file in os.listdir(dir_path):
@@ -21,6 +22,9 @@ def create_Dataset(dir_path,filename='Dataset_1.npy'):
                 features = list(data.values())    
                 flat_list = [item for sublist in features for item in sublist]
                 flat_unique = list(unique_everseen(flat_list))
+                variants = os.path.join(dir_path,'variants')
+                with open(variants, 'wb') as f:
+                    pickle.dump(flat_unique, f)                     
                 dataset = np.zeros((len(flat_unique),len(data.keys())),dtype=np.int8)
                 loop = tqdm(data.keys())
                 for col,key in enumerate(loop):
@@ -92,7 +96,7 @@ def adjust_learning_rate(init_lr, optimizer, epoch):
         param_group["lr"] = lr
     return lr
 
-def donor_info(dataset, models_labels, top=20,path='/home/john/Desktop/Dissertation/Dataset1'):    
+def donor_info(dataset, models_labels, top=20,path='/home/john/Desktop/Dissertation/Dataset1',var=[]):    
     output_dir = {} 
     for file in os.listdir(path):
         if file.endswith(".json"):
@@ -101,7 +105,9 @@ def donor_info(dataset, models_labels, top=20,path='/home/john/Desktop/Dissertat
                 data = json.load(datafile)
                 features = list(data.values())    
                 flat_list = [item for sublist in features for item in sublist]
-                variants = list(unique_everseen(flat_list))
+                if len(var) ==0:
+                    variants = list(unique_everseen(flat_list))
+                else: variants = var
                 cells_ID = list(data.keys())
     
     #Find cells IDs for each donor 

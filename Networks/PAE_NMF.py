@@ -58,9 +58,19 @@ class VAE(nn.Module):
         z = self.reparameterize(loglamba, logkappa)
         return self.decode(z), loglamba, logkappa, z
 
+    def save_model(self, path):
+        torch.save(self.state_dict(), path)
+
+    def load_model(self, path):
+        pretrained_dict = torch.load(path, map_location=lambda storage, loc: storage)
+        model_dict = self.state_dict()
+        pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
+        model_dict.update(pretrained_dict) 
+        self.load_state_dict(model_dict)
+    
     def loss_function(self,approximation, input_matrix, loglamda, logkappa):
         #Calculation of the Frobenius norm
-        Frobenius = 0.5*(torch.norm(input_matrix-approximation)**2)
+        Frobenius = 0.5*(torch.norm(input_matrix-approximation)**2)/approximation.shape[0]
         
         E = 0.5772 #Euler-Mascheroni constant
         kappa = logkappa.exp()
@@ -71,7 +81,7 @@ class VAE(nn.Module):
         #see PAE-NMF by Steven Squires, Adam Prugel-Bennett, Mahesan Niranjan, ICLR 2019
         #https://openreview.net/forum?id=BJGjOi09t7
         #derivation of KL divergence for Weibull distributions
-        KLD = torch.sum(logkappa - kappa*loglamda +(kappa-1)*(loglamda-E/kappa)+lamda*i-1)
+        KLD = torch.mean(logkappa - kappa*loglamda +(kappa-1)*(loglamda-E/kappa)+lamda*i-1)
         return Frobenius + KLD
 
     def fit(self,epochs, train_loader, lr=1e-3, scheduler_act=False, log_interval=23, device='cpu',
@@ -97,18 +107,16 @@ class VAE(nn.Module):
                 self.H.weight.data.clamp_(0)
                 for layer in self.decode_layers:
                     layer.weight.data.clamp_(0)
-                if batch_idx % log_interval == 0:
-                    print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                        epoch, batch_idx * len(data), len(train_loader.dataset),
-                        100. * batch_idx / len(train_loader),
-                        loss.item() / len(data)))
+
             if (epoch>50 and scheduler_act):            
                 scheduler.step()
             else:
                 epoch_lr = adjust_learning_rate(lr, optimizer, epoch)
             aver_loss = epoch_loss / len(train_loader.dataset)
             train_loss.append(aver_loss)
+            self.save_model(path)
             print('====> Epoch: {} Average loss: {:.4f}, Learning rate: {}'.format(
                 epoch, aver_loss, epoch_lr))
-        with open(path, 'wb') as f:
-            pickle.dump(train_loss, f)
+
+
+

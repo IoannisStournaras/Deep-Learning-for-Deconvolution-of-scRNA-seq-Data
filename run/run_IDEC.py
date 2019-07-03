@@ -13,7 +13,10 @@ from Datasets import Dataset
 from tqdm import tqdm
 import numpy as np
 import pickle
-import json
+import os
+
+dir_path = "/home/s1879286/Dissertation/Deep-Learning-for-Deconvolution-of-scRNA-seq-Data"
+pretrain_path = os.path.join(dir_path,'Pretrained','pretrained_AE_3.pt')
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='VAE for NMF')
@@ -29,7 +32,7 @@ if __name__ == "__main__":
                         help='random seed (default: 1)')
     parser.add_argument('--lr', type=float, default=0.001, metavar='N',
                         help='learning rate for training (default: 0.001)')
-    parser.add_argument('--pretrain', type=str, default='/home/john/Desktop/Dissertation/Dataset1/Pretrained Weights/pretrained_AE_cor1',
+    parser.add_argument('--pretrain', type=str, default=pretrain_path,
                         help='Path to load pretrained weights for auto-encoder')
     parser.add_argument('--clusters', default=2, type=int,
                         help='number of clusters (default: 2)')
@@ -50,14 +53,16 @@ if __name__ == "__main__":
     kwargs = {'num_workers': 8, 'pin_memory': True} if args.cuda else {}
 
     print('Loading the dataset...')
-    path = '/home/john/Desktop/Dissertation/Dataset1/labels_PCA'
-    with open(path, 'rb') as f:
-        labels_dict = pickle.load(f)
-    labels_ID = list(labels_dict.keys())
+    path = os.path.join(dir_path,'labels_3.npy')
+    labels = np.load(path)    
+    #with open(path, 'rb') as f:
+    #    labels_dict = pickle.load(f)
+    #labels_ID = list(labels_dict.keys())
 
-    path = '/home/john/Desktop/Dissertation/Dataset1/Dataset_1.npy'
+    path = os.path.join(dir_path,'Dataset_3.npy')
     df_train = np.load(path)
-    labels = np.array(list(labels_dict.values()))
+    df_train = df_train.T
+    #labels = np.array(list(labels_dict.values()))
 
     train_dataset = Dataset(data=df_train,labels=labels)
     train_loader = torch.utils.data.DataLoader(train_dataset,
@@ -65,9 +70,12 @@ if __name__ == "__main__":
                                             shuffle=True,
                                             **kwargs)
 
+    valid_loader = torch.utils.data.DataLoader(train_dataset,
+                                            batch_size=256,
+                                            shuffle=False)
     print('Created the DataLoader')
     input_dims = df_train.shape[1]
-    encoder_dims = [400,250,100]
+    encoder_dims = [750,700,1000]
     decoder_dims = encoder_dims[::-1]
     model = IDEC(n_input=input_dims, 
                 encode=encoder_dims, 
@@ -79,15 +87,15 @@ if __name__ == "__main__":
         print("Loading model from %s..." % args.pretrain)
         model.load_model(args.pretrain)
     else:
-        path = "/home/john/Desktop/Dissertation/Dataset1/Pretrained Weights/pretrained_AE_cor1"
+        path = os.path.join(dir_path,"Pretrained","pretrained_AE_3.pt")
         train_loader_AE = torch.utils.data.DataLoader(train_dataset,
                                             batch_size=64,
                                             shuffle=True,
                                             **kwargs)
         model.pretrain(train_loader_AE, path, num_epochs=args.AE_epochs)
-        model.load_model(path)
-    
-    model.initialize_kmeans(train_dataset)
-    model.fit(train_dataset, train_loader, lr=args.lr, num_epochs=args.epochs,
+    #    model.load_model(path)
+    path = os.path.join(dir_path,'Pretrained','IDEC_3.pt')
+    model.initialize_kmeans(valid_loader)
+    model.fit(valid_loader, train_loader,path, lr=args.lr, num_epochs=args.epochs,
              update_target=args.update_target,gama=args.gamma,tolerance=args.tol)
-    model.save_model("/home/john/Desktop/Dissertation/Dataset1/Pretrained Weights/IDEC_3HL_try")
+    model.save_model(path)

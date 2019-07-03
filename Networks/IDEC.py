@@ -56,8 +56,8 @@ class IDEC(nn.Module):
         batch: [batch_size, input_dimensions]
         output: [batch_size, number_of_clusters]
         """
-        x_bar, z = self.ae(batch)
 
+        x_bar, z = self.ae.forward(batch)
         Frobenius_squared = torch.sum((z.unsqueeze(1)-self.cluster_centers)**2,2)
         numerator = 1.0 / (1.0+(Frobenius_squared/self.alpha))
         power = float(self.alpha+1)/2
@@ -65,27 +65,42 @@ class IDEC(nn.Module):
         q = numerator / torch.sum(numerator, dim=1, keepdim=True)
         return x_bar, q, z        
 
-    def initialize_kmeans(self,train_dataset):
+    def initialize_kmeans(self,valid_loader):
         print("=====Initializing KMeans Centers=======")
-        data = train_dataset.data
-        data = torch.from_numpy(np.array(data, dtype='float32'))
         use_cuda = torch.cuda.is_available()
-        use_cuda =False
         if use_cuda:
             self.cuda()
-            data = data.cuda()
 
-        _ , latent = self.ae.forward(data)
+        self.eval()
+        data = []
+        loop = tqdm(valid_loader)
+        for batch_idx, (inputs,_,_) in enumerate(loop):
+            if use_cuda:
+                inputs = inputs.cuda() 
+            _ , latent = self.ae.forward(inputs)
+            data.append(latent.data.cpu().numpy())
+        data = np.concatenate(data)
         kmeans = KMeans(n_clusters=self.n_clusters, n_init=20)
-        y_pred = kmeans.fit_predict(latent.data.cpu().numpy())
-        
+        y_pred = kmeans.fit_predict(data)
         self.y_pred_last = y_pred
         
         self.cluster_centers.data = torch.tensor(kmeans.cluster_centers_)
 
-    def update_target_distribution(self,data,labels,tol):
-        _, tmp_q, _ = self.forward(data)
-        tmp_q = tmp_q.data
+    def update_target_distribution(self,valid_loader,tol):
+        data = []
+        labels = []
+        use_cuda = torch.cuda.is_available()
+        if use_cuda:
+            self.cuda()
+        
+        for batch_idx, (inputs, tar,_) in enumerate(valid_loader):
+            if use_cuda:
+                inputs = inputs.cuda()
+            _, tmp_q, _ = self.forward(inputs)
+            data.append(tmp_q.data)
+            labels.append(tar.cpu().numpy())
+        tmp_q = torch.cat(data)
+        labels = np.concatenate(labels)
         self.prop = self.target_distribution(tmp_q)
 
         #evaluate clustering performance
@@ -101,16 +116,12 @@ class IDEC(nn.Module):
             self.convergence_iter = 0 
         return labels_changed, cluster_acc(labels,y_pred)[0]
 
-    def fit(self,train_dataset,train_loader,num_epochs=100,lr=1e-4,update_target=1,gama=0.1,tolerance=1e-4,loss_type="cross-entropy"):
-        data = train_dataset.data
-        data = torch.from_numpy(np.array(data, dtype='float32'))
-        labels = train_dataset.labels
+    def fit(self,valid_loader,train_loader,path,num_epochs=100,lr=1e-4,update_target=1,gama=0.1,tolerance=1e-4,loss_type="cross-entropy"):
         
-        use_cuda =False
-        #use_cuda = torch.cuda.is_available()
+        use_cuda = torch.cuda.is_available()
         if use_cuda:
             self.cuda()
-            data = data.cuda()
+            
         if loss_type=="mse":
             criterion = nn.MSELoss()
         elif loss_type=="cross-entropy":
@@ -126,7 +137,7 @@ class IDEC(nn.Module):
         for epoch in range(num_epochs):
             print("Executing IDEC",epoch,"...")
             if epoch % update_target == 0:
-                labels_changed, acc = self.update_target_distribution(data,labels,tol=tolerance)
+                labels_changed, acc = self.update_target_distribution(valid_loader,tol=tolerance)
             if self.convergence_iter >=10:
                 print('percentage of labels changed {:.4f}'.format(labels_changed), '< tol',tolerance)
                 print('Reached Convergence threshold. Stopping training.')
@@ -151,6 +162,7 @@ class IDEC(nn.Module):
             train_loss.append(epoch_loss)
             print("epoch {} loss={:.4f}, accuracy={:.5f}".format(epoch,epoch_loss,acc))
             scheduler.step()
+            self.save_model(path)
 
     def Frobenius_norm(self,approximation=None, input_matrix=None):
         #Minimizing the Frobenius norm

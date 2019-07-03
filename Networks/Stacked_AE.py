@@ -64,7 +64,6 @@ class AE(nn.Module):
 
     def fit(self, train_loader, num_epochs=50, lr=1e-3, loss_type='cross-entropy'):
         use_cuda = torch.cuda.is_available()
-        use_cuda =False
         if use_cuda:
             self.cuda()
         
@@ -98,9 +97,9 @@ class AE(nn.Module):
             train_loss.append(epoch_loss)
             print("epoch {} loss={:.4f}".format(epoch, total_loss))
 
-        path = '/home/john/Desktop/Dissertation/Dataset1/TrainingError/AE_loss_cor'
-        with open(path, 'wb') as f:
-            pickle.dump(train_loss, f)
+#        path = '/home/john/Desktop/Dissertation/Dataset1/TrainingError/AE_loss_cor'
+#        with open(path, 'wb') as f:
+#            pickle.dump(train_loss, f)
     
     def load_model(self, path):
         pretrained_dict = torch.load(path, map_location=lambda storage, loc: storage)
